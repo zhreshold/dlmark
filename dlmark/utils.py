@@ -1,4 +1,5 @@
 from subprocess import check_output
+import multiprocessing
 
 def nv_gpu_mem_usage(dev_id=0):
     ret = check_output([
@@ -14,3 +15,6 @@ def nv_gpu_name(dev_id=0):
              if 'Product Name' in l]
     assert len(lines) > 0
     return lines[0][1].strip()
+
+def get_cpu_count():
+    return multiprocessing.cpu_count()
