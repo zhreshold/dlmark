@@ -24,7 +24,7 @@ def get_map(model_name):
     net.collect_params().reset_ctx(ctx)
     metric.reset()
     net.set_nms(nms_thresh=0.45, nms_topk=400)
-    net.hybridize()
+    net.hybridize(static_shape=True, static_alloc=True)
     for ib in range(len(dataset)):
         batch = dataset[ib]
         x = batch[0].as_in_context(ctx)
@@ -66,7 +66,7 @@ def get_throughput(model_name, batch_size):
     device_name = dm.utils.nv_gpu_name(0)
     net = gcv.model_zoo.get_model(model_name, pretrained=True)
     net.collect_params().reset_ctx(ctx)
-    net.hybridize()
+    net.hybridize(static_shape=True, static_alloc=True)
     mem = dm.utils.nv_gpu_mem_usage()
     data_shape = int(model_name.split('_')[1])
 
@@ -148,6 +148,7 @@ def benchmark_max_batch_size():
     for model_name in ssd_models:
         print(model_name)
         net = gcv.model_zoo.get_model(model_name, pretrained=True)
+        net.hybridize(static_shape=True, static_alloc=True)
         data_shape = int(model_name.split('_')[1])
         dataset = dm.image.COCOVal2017(1, SSDDefaultValTransform(data_shape, data_shape),
             'ssd_default_%d'%(data_shape))
