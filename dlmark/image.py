@@ -95,8 +95,12 @@ class COCOVal2017(object):
             raise IndexError
         begin = idx * self.batch_size
         batch = self._buffer[begin]
+        if len(batch) > 2:
+            batch = [batch[0], batch[2]]
+        else:
+            batch = [batch[0]]
         if self.batch_size < 2:
-            return tuple([mx.nd.NDArray(x) for x in batch])
+            return tuple([mx.nd.array(x) for x in batch])
 
         N = len(batch)
         batches = [batch]
@@ -105,7 +109,7 @@ class COCOVal2017(object):
 
         out = []
         for x in zip(*batches):
-            out.append(mx.nd.NDArray(np.concatenate(x)))
+            out.append(mx.nd.array(np.concatenate(x)))
         return tuple(out)
 
 

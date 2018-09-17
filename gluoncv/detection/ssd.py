@@ -11,7 +11,7 @@ models = gcv.model_zoo.model_store.pretrained_model_list()
 ssd_models = [x for x in models if x.startswith('ssd') and x.endswith('coco')]
 
 def get_map(model_name):
-    batch_size = 32
+    batch_size = 20  # divides 5000
     data_shape = int(model_name.split('_')[1])
     dataset = dm.image.COCOVal2017(batch_size, SSDDefaultValTransform(data_shape, data_shape),
         'ssd_default_%d'%(data_shape))
@@ -31,7 +31,7 @@ def get_map(model_name):
         det_bboxes = []
         det_ids = []
         det_scores = []
-        for x in [data]:
+        for x in [x]:
             ids, scores, bboxes = net(x)
             det_ids.append(ids)
             det_scores.append(scores)
