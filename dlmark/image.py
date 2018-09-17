@@ -59,7 +59,7 @@ class ILSVRC12Val(object):
 
 class COCOVal2017(object):
     def __init__(self, batch_size, transform, prefix, tmp_dir='~/.dlmark/datasets/cocoval2017'):
-        tmp_dir = os.path.abspath(tmp_dir)
+        tmp_dir = os.path.expanduser(tmp_dir)
         if not os.path.isdir(tmp_dir):
             os.makedirs(tmp_dir)
         tmp_file = os.path.join(tmp_dir, 'cocoval2017_' + prefix + '.npy')
@@ -103,8 +103,10 @@ class COCOVal2017(object):
         for i in range(begin + 1, begin + self.batch_size):
             batches.append(self._buffer[i])
 
-        out = tuple([mx.nd.NDArray(np.concatenate([batches[j] for j in range(N)]))])
-        return out
+        out = []
+        for x in zip(*batches):
+            out.append(mx.nd.NDArray(np.concatenate(x)))
+        return tuple(out)
 
 
 if __name__ == '__main__':
