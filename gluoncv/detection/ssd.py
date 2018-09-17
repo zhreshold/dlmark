@@ -1,7 +1,7 @@
 import dlmark as dm
 import mxnet as mx
 from mxnet import nd
-import time
+import time, os
 import numpy as np
 import json
 import gluoncv as gcv
@@ -56,10 +56,10 @@ def benchmark_map():
             get_map, model_name
         )
         results.append(res)
-        with open('ssd_'+device_name+'_map.json', 'w') as f:
+        with open(os.path.join(os.path.dirname(__file__), 'ssd_'+device_name+'_map.json'), 'w') as f:
             json.dump(results, f)
 
-# benchmark_map()
+benchmark_map()
 
 def get_throughput(model_name, batch_size):
     ctx = mx.gpu(0)
@@ -110,17 +110,18 @@ def benchmark_throughput():
                 break
             save.add(res)
 
-# benchmark_throughput()
+benchmark_throughput()
 
 def _try_batch_size(net, batch_size, data_shape, ctx, X):
     print('Try batch size', batch_size)
-    def _run(X):
+    def _run():
         net.collect_params().reset_ctx(ctx)
-        X = X.tile(reps=(batch_size, 1, 1, 1)).as_in_context(ctx)
-        y = net(X)
+        XX = X.tile(reps=(batch_size, 1, 1, 1)).as_in_context(ctx)
+        y = net(XX)
         nd.waitall()
+        yy = y[0].asnumpy()
 
-    _, exitcode = dm.benchmark.run_with_separate_process(_run, X)
+    _, exitcode = dm.benchmark.run_with_separate_process(_run)
     return exitcode == 0
 
 def find_largest_batch_size(net, data_shape, X):
@@ -148,7 +149,6 @@ def benchmark_max_batch_size():
     for model_name in ssd_models:
         print(model_name)
         net = gcv.model_zoo.get_model(model_name, pretrained=True)
-        net.hybridize(static_shape=True, static_alloc=True)
         data_shape = int(model_name.split('_')[1])
         dataset = dm.image.COCOVal2017(1, SSDDefaultValTransform(data_shape, data_shape),
             'ssd_default_%d'%(data_shape))
