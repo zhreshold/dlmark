@@ -78,6 +78,7 @@ def get_throughput(model_name, batch_size):
     # X = _preprocess(X).as_in_context(ctx)
     Y = net(X)
     nd.waitall()
+    YY = Y[0][0].asnumpy()
 
     # iterate mutliple times
     iters = 1000 // batch_size
@@ -85,6 +86,7 @@ def get_throughput(model_name, batch_size):
     for _ in range(iters):
         Y = net(X)
         nd.waitall()
+        YY = Y[0][0].asnumpy()
 
     throughput = iters*batch_size/(time.time()-tic)
 
