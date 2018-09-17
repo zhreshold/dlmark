@@ -1,0 +1,6 @@
+name: mxnet-v130-cu90
+dependencies:
+- python
+- pip:
+  - mxnet-cu90==1.3.0.post0
+  - gluoncv>=0.3.0

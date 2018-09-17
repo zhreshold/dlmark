@@ -5,7 +5,7 @@ import time
 import numpy as np
 import json
 import gluoncv as gcv
-from gluoncv.data.transforms.preset.ssd import SSDDefaultValTransform
+from gluoncv.data.transforms.presets.ssd import SSDDefaultValTransform
 
 models = gcv.model_zoo.model_store.pretrained_model_list()
 ssd_models = [x for x in models if x.startswith('ssd') and x.endswith('coco')]
@@ -16,7 +16,7 @@ def get_map(model_name):
     dataset = dm.image.COCOVal2017(batch_size, SSDDefaultValTransform(data_shape, data_shape),
         'ssd_default_%d'%(data_shape))
     val_dataset = gcv.data.COCODetection(splits='instances_val2017', skip_empty=False)
-    val_metric = gcv.utils.metrics.coco_detection.COCODetectionMetric(
+    metric = gcv.utils.metrics.coco_detection.COCODetectionMetric(
             val_dataset, '/tmp/{}_eval'.format(model_name), cleanup=True,
             data_shape=(data_shape, data_shape))
     ctx = mx.gpu(0)
