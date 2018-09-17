@@ -84,7 +84,8 @@ def get_throughput(model_name, batch_size):
     tic = time.time()
     for _ in range(iters):
         Y = net(X)
-    nd.waitall()
+        nd.waitall()
+
     throughput = iters*batch_size/(time.time()-tic)
 
     return {
@@ -109,17 +110,17 @@ def benchmark_throughput():
                 break
             save.add(res)
 
-benchmark_throughput()
+# benchmark_throughput()
 
 def _try_batch_size(net, batch_size, data_shape, ctx, X):
     print('Try batch size', batch_size)
-    def _run():
+    def _run(X):
         net.collect_params().reset_ctx(ctx)
         X = X.tile(reps=(batch_size, 1, 1, 1)).as_in_context(ctx)
         y = net(X)
         nd.waitall()
 
-    _, exitcode = dm.benchmark.run_with_separate_process(_run)
+    _, exitcode = dm.benchmark.run_with_separate_process(_run, X)
     return exitcode == 0
 
 def find_largest_batch_size(net, data_shape, X):
