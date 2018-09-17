@@ -151,7 +151,7 @@ def benchmark_max_batch_size():
         data_shape = int(model_name.split('_')[1])
         dataset = dm.image.COCOVal2017(1, SSDDefaultValTransform(data_shape, data_shape),
             'ssd_default_%d'%(data_shape))
-        X = dataset[0]
+        X = dataset[0][0]
         save.add({
             'device':device_name,
             'model':model_name,
