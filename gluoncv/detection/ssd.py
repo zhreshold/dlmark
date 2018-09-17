@@ -43,7 +43,7 @@ def get_map(model_name):
         'device':dm.utils.nv_gpu_name(0),
         'model':model_name,
         'batch_size':batch_size,
-        'map':float(metric.get()[1][-1]),
+        'map':'{:.2f}'.format(float(metric.get()[1][-1])),
         'workload':'Inference',
     }
 
@@ -59,7 +59,7 @@ def benchmark_map():
         with open('ssd_'+device_name+'_map.json', 'w') as f:
             json.dump(results, f)
 
-benchmark_map()
+# benchmark_map()
 
 def get_throughput(model_name, batch_size):
     ctx = mx.gpu(0)
@@ -73,7 +73,7 @@ def get_throughput(model_name, batch_size):
     # warm up, need real data
     dataset = dm.image.COCOVal2017(batch_size, SSDDefaultValTransform(data_shape, data_shape),
         'ssd_default_%d'%(data_shape))
-    X = dataset[0].as_in_context(ctx)
+    X = dataset[0][0].as_in_context(ctx)
     # X = np.random.uniform(low=-254, high=254, size=(batch_size,3, data_shape,data_shape))
     # X = _preprocess(X).as_in_context(ctx)
     Y = net(X)
@@ -154,7 +154,7 @@ def benchmark_max_batch_size():
         save.add({
             'device':device_name,
             'model':model_name,
-            'batch_size':find_max_batch_size(net, (3,data_shape,data_shape), X),
+            'batch_size':find_largest_batch_size(net, (3,data_shape,data_shape), X),
             'workload':'Inference',
         })
 
