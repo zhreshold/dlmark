@@ -103,6 +103,50 @@ def throughput_vs_accuracy(data):
 
     return p
 
+def throughput_vs_map(data):
+    assert 'map' in data.columns, data.columns
+    assert ('model' in data.columns or
+            'model_prefix' in data.columns), data.columns
+    model = 'model_prefix' if 'model_prefix' in data.columns else 'model'
+    models = sorted(data[model].unique())
+    colors = palettes.Category10[max(len(models),3)]
+    index_cmap = factor_cmap(model, palette=colors, factors=models, end=1)
+
+    data = data.copy()
+    if ('device_mem' in data.columns and
+        not 'size' in data.columns):
+        size = np.sqrt(data.device_mem.values)
+        data['size'] = 30 * size / size.max()
+
+    if 'size' in data.columns:
+        size = 'size'
+    else:
+        size = 10
+
+    p = figure(plot_width=600, plot_height=500,
+               toolbar_location=None, tools="", x_axis_type="log")
+    source = ColumnDataSource(data)
+
+    p.scatter(x='throughput', y='map', legend=model,
+              size=size, color=index_cmap, source=source)
+
+    p.xaxis.axis_label = '#examples/sec'
+    p.xgrid.grid_line_color = None
+    p.yaxis.axis_label = 'mAP'
+
+    toolstips = [("Model", "@model"),
+                 ("Throughput", "@throughput"),
+                 ("mAP", "@mAP")]
+    if 'device_mem' in data.columns:
+        toolstips.append(["Device memory", "@device_mem MB"])
+    p.add_tools(HoverTool(tooltips=toolstips))
+    p.background_fill_alpha = 0
+    p.border_fill_alpha = 0
+    p.legend.background_fill_alpha = 0
+    # p.xaxis[0].formatter = LogTickFormatter()
+
+    return p
+
 def max_batch_size(data):
     models = data['model'].values
     batchs = data['batch_size'].values
