@@ -118,6 +118,7 @@ def throughput_vs_map(data):
         size = np.sqrt(data.device_mem.values)
         data['size'] = 30 * size / size.max()
 
+    data.map = data.map.astype(float)
     if 'size' in data.columns:
         size = 'size'
     else:
@@ -125,18 +126,19 @@ def throughput_vs_map(data):
 
     p = figure(plot_width=600, plot_height=500,
                toolbar_location=None, tools="", x_axis_type="log")
+
     source = ColumnDataSource(data)
 
-    p.scatter(x='throughput', y='map', legend=model,
+    p.circle(x='throughput', y='map', legend=model,
               size=size, color=index_cmap, source=source)
 
     p.xaxis.axis_label = '#examples/sec'
     p.xgrid.grid_line_color = None
-    p.yaxis.axis_label = 'map'
+    p.yaxis.axis_label = 'mAP'
 
     toolstips = [("Model", "@model"),
                  ("Throughput", "@throughput"),
-                 ("map", "@map")]
+                 ("mAP", "@map")]
     if 'device_mem' in data.columns:
         toolstips.append(["Device memory", "@device_mem MB"])
     p.add_tools(HoverTool(tooltips=toolstips))

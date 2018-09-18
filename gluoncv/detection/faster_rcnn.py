@@ -106,7 +106,7 @@ def benchmark_throughput():
         batch_sizes = [1,]
         for batch_size in batch_sizes:
             res, exitcode = dm.benchmark.run_with_separate_process(
-                get_throughput, model_name, batch_size, dshape
+                get_throughput, model_name, batch_size
             )
             if exitcode:
                 break
