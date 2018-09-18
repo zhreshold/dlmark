@@ -3,7 +3,7 @@
 
 set -e
 
-sudo apt-get update 
+sudo apt-get update
 sudo apt-get install -y build-essential libgfortran3
 
 wget https://developer.nvidia.com/compute/cuda/9.0/Prod/local_installers/cuda_9.0.176_384.81_linux-run
@@ -18,4 +18,3 @@ bash Miniconda3-latest-Linux-x86_64.sh -b
 rm Miniconda3-latest-Linux-x86_64.sh
 
 echo "export PATH=\"/home/ubuntu/miniconda3/bin:\$PATH\"" >>~/.bashrc
-
