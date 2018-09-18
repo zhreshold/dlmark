@@ -103,7 +103,7 @@ def benchmark_throughput():
     save = dm.benchmark.SaveResults(postfix=dm.utils.nv_gpu_name(0))
     for model_name in ssd_models:
         print(model_name)
-        batch_sizes = [1,2,4,8,16,32,64,128,256]
+        batch_sizes = [1,2,4,8,16,20,32,64,128,256]
         for batch_size in batch_sizes:
             res, exitcode = dm.benchmark.run_with_separate_process(
                 get_throughput, model_name, batch_size
