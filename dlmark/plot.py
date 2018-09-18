@@ -132,11 +132,11 @@ def throughput_vs_map(data):
 
     p.xaxis.axis_label = '#examples/sec'
     p.xgrid.grid_line_color = None
-    p.yaxis.axis_label = 'mAP'
+    p.yaxis.axis_label = 'map'
 
     toolstips = [("Model", "@model"),
                  ("Throughput", "@throughput"),
-                 ("mAP", "@mAP")]
+                 ("map", "@map")]
     if 'device_mem' in data.columns:
         toolstips.append(["Device memory", "@device_mem MB"])
     p.add_tools(HoverTool(tooltips=toolstips))
