@@ -113,9 +113,12 @@ def throughput_vs_map(data):
     index_cmap = factor_cmap(model, palette=colors, factors=models, end=1)
 
     data = data.copy()
-    if ('device_mem' in data.columns and
+    if ('device_mem' in data.columns and 'batch_size' in data.columns and
+        'device_mem_per_batch' not in data.columns):
+        data['device_mem_per_batch'] = data['device_mem'] / data['batch_size']
+    if ('device_mem_per_batch' in data.columns and
         not 'size' in data.columns):
-        size = np.sqrt(data.device_mem.values)
+        size = np.sqrt(data.device_mem_per_batch.values)
         data['size'] = 30 * size / size.max()
 
     data.map = data.map.astype(float)
@@ -139,8 +142,10 @@ def throughput_vs_map(data):
     toolstips = [("Model", "@model"),
                  ("Throughput", "@throughput"),
                  ("mAP", "@map")]
-    if 'device_mem' in data.columns:
-        toolstips.append(["Device memory", "@device_mem MB"])
+    if 'device_mem_per_batch' in data.columns:
+        toolstips.append(["Device memory Per Batch", "@device_mem_per_batch MB"])
+    if 'best_throughput_batch_size' in data.columns:
+        toolstips.append(["Best throughput @Batch size", "@best_throughput_batch_size"])
     p.add_tools(HoverTool(tooltips=toolstips))
     p.background_fill_alpha = 0
     p.border_fill_alpha = 0
