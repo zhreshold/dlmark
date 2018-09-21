@@ -90,6 +90,10 @@ def throughput_vs_accuracy(data):
     p.xgrid.grid_line_color = None
     p.yaxis.axis_label = 'Accuracy'
 
+    p.legend.label_text_font_size = '12pt'
+    p.xaxis.axis_label_text_font_size = "15pt"
+    p.yaxis.axis_label_text_font_size = "15pt"
+
     toolstips = [("Model", "@model"),
                  ("Throughput", "@throughput"),
                  ("Accuracy", "@accuracy")]
@@ -135,9 +139,14 @@ def throughput_vs_map(data):
     p.circle(x='throughput', y='map', legend=model,
               size=size, color=index_cmap, source=source)
 
+    p.legend.label_text_font_size = '12pt'
+
     p.xaxis.axis_label = '#examples/sec'
     p.xgrid.grid_line_color = None
     p.yaxis.axis_label = 'mAP'
+
+    p.xaxis.axis_label_text_font_size = "15pt"
+    p.yaxis.axis_label_text_font_size = "15pt"
 
     toolstips = [("Model", "@model"),
                  ("Throughput", "@throughput"),
