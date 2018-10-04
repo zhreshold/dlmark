@@ -7,6 +7,8 @@ import json
 import gluoncv as gcv
 from gluoncv.data.transforms.presets.rcnn import FasterRCNNDefaultValTransform
 
+os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
+
 models = gcv.model_zoo.model_store.pretrained_model_list()
 frcnn_models = [x for x in models if x.startswith('faster_rcnn') and x.endswith('coco')]
 
@@ -40,11 +42,13 @@ def get_map(model_name):
             det_bboxes[-1] *= im_scale
         metric.update(det_bboxes, det_ids, det_scores)
 
+    result = metric.get()
     return {
         'device':dm.utils.nv_gpu_name(0),
         'model':model_name,
         'batch_size':batch_size,
-        'map':'{:.2f}'.format(float(metric.get()[1][-1])),
+        'map':'{:.2f}'.format(float(result[1][-1])),
+        'map_per_class': {k:float(v) for k, v in zip(result[0][1:-1], result[1][1:-1])},
         'workload':'Inference',
     }
 

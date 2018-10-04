@@ -1,3 +1,4 @@
+
 # GluonCV: detection
 
 We benchmark the convolutional neural networks provided by the [GluonCV modelzoo](https://gluon-cv.mxnet.io/model_zoo/index.html#) for object detection.
@@ -8,7 +9,8 @@ We benchmark the convolutional neural networks provided by the [GluonCV modelzoo
 
 Given network `net` and batch size `b`, we feed `b` images, denoted by `X`, into `net` to measture the time `t` to complete `net(X)`. We then calculate the throughput as `b/t`. We first load the benchmark resutls and print all network and devices names
 
-```{.python .input  n=49}
+
+```
 import dlmark as dm
 import pandas as pd
 import numpy as np
@@ -25,39 +27,53 @@ devices = thr.device.unique()
 
 Now we visualize the throughput for each network when increasing the batch sizes. We only use the results on the first device and show a quater of networks:
 
-```{.python .input  n=2}
+
+```
 from dlmark import plot
 from bokeh.plotting import show, output_notebook
 output_notebook()
 
 data = thr[(thr.device==devices[0]) & (thr.batch_size.isin([1,2,4,8,16,32,64,128]))]
-show(plot.batch_size_vs_throughput_grid(data, models[::1]))
+# show(plot.batch_size_vs_throughput_grid(data, models[::1]))
 ```
 
 The throughput increases with the batch size in log scale. The device memory, as exepcted, also increases linearly with the batch size. But note that, due to the pooled memory mechanism in MXNet, the measured device memory usage might be different to the actual memory usdage.
 
 One way to measure the actual device memory usage is finding the largest batch size we can run.
 
-```{.python .input  n=3}
+
+```
 bs = pd.concat([dm.benchmark.load_results(prefix + '.py__benchmark_max_batch_size.json') for prefix in prefixs])
-show(plot.max_batch_size(bs))
+# show(plot.max_batch_size(bs))
 ```
 
 ## Throughput on various hardware
 
-```{.python .input  n=4}
+
+```
 #show(plot.throughput_vs_device(thr[(thr.model=='AlexNet')]))
 ```
 
-```{.python .input  n=5}
+
+```
 #show(plot.throughput_vs_device(thr[(thr.model=='ResNet-v2-50')]))
+```
+
+
+```
+paper_results = {
+    'yolo3_darknet53_coco@608': 33.0,
+    'yolo3_darknet53_coco@416': 31.0,
+    'yolo3_darknet53_coco@320': 28.6,
+}
 ```
 
 ### Prediction mAP versus throughput
 
 We measture the prediction mean AP of each model using the MSCOCO 2017 validation dataset. Then plot the results together with the best throughput across various batch-sizes(if applicable). We colorize models from the same family with the same color.
 
-```{.python .input  n=84}
+
+```
 def throughput_vs_map(data):
     import numpy as np
     from bokeh import palettes
@@ -89,17 +105,38 @@ def throughput_vs_map(data):
     else:
         size = 10
 
-    p = figure(plot_width=600, plot_height=500,
-               toolbar_location=None, tools="", x_axis_type="log")
+    data['paper'] = data.index.map(paper_results)
+#     data['paper_diff_percent'] = (data['accuracy'] - data['paper']) * 100
+    data['paper_diff_percent'] = pd.Series(["{0:.2f}%".format((val1-val2) * 100) if val1 > val2 else 'N/A' for val1, val2 in zip(data['accuracy'], data['paper'])], index = data.index)
+    data = data.fillna(0)
+
+    p = figure(plot_width=600, plot_height=600, title='Inference Throughput vs. mAP on COCO',
+               x_axis_type="log", active_drag="pan", toolbar_location='above')
 
     source = ColumnDataSource(data)
 
     p.circle(x='throughput', y='map', legend=model,
               size=size, color=index_cmap, source=source)
 
-    p.xaxis.axis_label = '#examples/sec'
+    for ic, row in enumerate(data['model_prefix']):
+        if not data['paper'][ic]:
+            continue
+        w_data = dict(base=[data['throughput'][ic]], lower=[data['paper'][ic]], upper=[data['accuracy'][ic]])
+        w_source = ColumnDataSource(data=w_data)
+        w = Whisker(source=w_source, base="base", upper="upper", lower="lower", dimension='height', line_color=data['color'][ic], lower_head=TeeHead(size=10, line_color=data['color'][ic]), upper_head=TeeHead(size=1, line_color=data['color'][ic]))
+        whisker_map[row] = [w] if row not in whisker_map else whisker_map[row] + [w]
+        p.add_layout(w)
+
+    p.legend.label_text_font_size = '1.5vw'
+    p.legend[0].location = "bottom_left"
+
+    p.xaxis.axis_label = '#samples/sec'
     p.xgrid.grid_line_color = None
     p.yaxis.axis_label = 'mAP'
+
+    p.xaxis.axis_label_text_font_size = "2vw"
+    p.yaxis.axis_label_text_font_size = "2vw"
+    p.title.text_font_size = "2vw"
 
     toolstips = [("Model", "@model"),
                  ("Throughput", "@throughput"),
@@ -113,11 +150,141 @@ def throughput_vs_map(data):
     p.border_fill_alpha = 0
     p.legend.background_fill_alpha = 0
     # p.xaxis[0].formatter = LogTickFormatter()
-
+    p.sizing_mode = 'scale_width'
     return p
 ```
 
-```{.python .input  n=85}
+
+```
+import numpy as np
+from bokeh import palettes
+from bokeh.plotting import figure
+from bokeh.models import ColumnDataSource, HoverTool, FactorRange
+from bokeh.layouts import gridplot
+from bokeh.transform import factor_cmap
+from bokeh.models import LogTickFormatter, Span, Whisker, TeeHead
+import pandas as pd
+
+def make_dataset(data, model_list):
+    from bokeh import palettes
+    from bokeh.transform import factor_cmap
+    data = data.copy()
+    data.map = data.map.astype(float)
+    data = data[data.index.isin(model_list)]
+    assert 'map' in data.columns, data.columns
+    assert ('model' in data.columns or
+            'model_prefix' in data.columns), data.columns
+    model = 'model_prefix' if 'model_prefix' in data.columns else 'model'
+    models = sorted(data[model].unique())
+    colors = palettes.Category10[max(len(models),3)]
+    index_cmap = factor_cmap(model, palette=colors, factors=models, end=1)
+    data['color'] = [colors[models.index(c)] for c in data['model_prefix']]
+
+    if ('device_mem' in data.columns and 'batch_size' in data.columns and
+        'device_mem_per_batch' not in data.columns):
+        data['device_mem_per_batch'] = data['device_mem'] / data['batch_size']
+    if ('device_mem_per_batch' in data.columns and
+        not 'size' in data.columns):
+        size = np.sqrt(data.device_mem_per_batch.values)
+        data['size'] = 30 * size / size.max()
+
+    if 'size' in data.columns:
+        pass
+    else:
+        data['size'] = [10 for m in data.index]
+
+    data['paper'] = data.index.map(paper_results)
+#     data['paper_diff_percent'] = (data['accuracy'] - data['paper']) * 100
+    data['paper_diff_percent'] = pd.Series(["{0:.2f}%".format((float(val1)-val2)) if float(val1) > float(val2) else 'N/A' for val1, val2 in zip(data['map'], data['paper'])], index = data.index)
+    data = data.fillna(0)
+    source = ColumnDataSource(data)
+    return source
+
+def make_plot(src):
+
+    from bokeh.models import CustomJS
+    data = src.data
+    p = figure(plot_width=600, plot_height=600,
+               x_axis_type="log", active_drag="pan", toolbar_location='above',tools="pan,wheel_zoom,box_zoom,save,reset",)
+
+    toolstips = [("Model", "@model"),
+                 ("Throughput", "@throughput"),
+                 ("mAP", "@map"),
+                 ("Improvement over Reference", "@paper_diff_percent"),
+                 ("Device memory Per Batch", "@device_mem_per_batch MB"),
+                 ("Best throughput @Batch size", "@best_throughput_batch_size")]
+
+    uniq_model = list(set(data['model_prefix']))
+    uniq_model.sort()
+
+    legend_map = dict()
+
+    for current_prefix in uniq_model:
+        indices = [i for i, x in enumerate(data['model_prefix']) if x == current_prefix]
+        cc = {k: [v[i] for i in indices] for k, v in data.items()}
+        current_source = ColumnDataSource(pd.DataFrame(cc))
+        pr = p.circle(x='throughput', y='map', legend='model_prefix', size="size", color='color', source=current_source)
+        legend_map[current_prefix] = pr
+
+    whisker_map = dict()
+#     print(len(p.legend[0].items))
+    for ic, row in enumerate(data['model_prefix']):
+#         idx = legend_map.index(row)
+        if not data['paper'][ic]:
+            continue
+        w_data = dict(base=[data['throughput'][ic]], lower=[data['paper'][ic]], upper=[data['map'][ic]])
+        w_source = ColumnDataSource(data=w_data)
+#         print(float(data['paper'][ic]), w_source.data, data['color'][ic])
+        w = Whisker(source=w_source, base="base", upper="upper", lower="lower", dimension='height', line_color=data['color'][ic], lower_head=TeeHead(size=10, line_color=data['color'][ic]), upper_head=TeeHead(size=1, line_color=data['color'][ic]))
+#         print(type(w))
+#         print(type(p.legend[0].items[idx].renderers))
+#         p.legend[0].items[idx].renderers.append([w])
+        whisker_map[row] = [w] if row not in whisker_map else whisker_map[row] + [w]
+#         
+        p.add_layout(w)
+
+    for name in whisker_map.keys():
+        assert name in legend_map.keys()
+        c = legend_map[name]
+        w = whisker_map[name]
+        c.js_on_change('visible', CustomJS(args=dict(c=c, w=w), code="""
+        // get data source from Callback args
+        // console.log('enter', c.visible, w.visible);
+        w.forEach(function(element) {
+          element.visible = c.visible;
+        });
+        // w.visible = c.visible;
+        """))
+
+    p.xaxis.axis_label = '#samples/sec'
+    p.xgrid.grid_line_color = None
+    p.yaxis.axis_label = 'mAP'
+
+    p.legend[0].location = "bottom_left"
+    p.legend.label_text_font_size = '1em'
+    p.xaxis.axis_label_text_font_size = "1.5em"
+    p.title.text_font_size = '1em'
+    p.yaxis.axis_label_text_font_size = "1em"
+    p.xaxis.axis_label_text_font_size = "1em"
+    p.xaxis.major_label_text_font_size = "0.5em"
+    p.yaxis.axis_label_text_font_size = "1em"
+    p.yaxis.major_label_text_font_size = "0.5em"
+
+
+    p.add_tools(HoverTool(tooltips=toolstips))
+    p.background_fill_alpha = 0
+    p.border_fill_alpha = 0
+    p.legend.background_fill_alpha = 0
+    p.legend.click_policy = "hide"
+    p.toolbar.logo = None
+#     for ppp in p.legend[0].items:
+#         print(ppp.renderers)
+    # p.xaxis[0].formatter = LogTickFormatter()
+    return p
+```
+
+
+```
 maps = pd.concat([dm.benchmark.load_results(prefix + '*map.json') for prefix in prefixs])
 thr = thr.reset_index(drop=True)
 thr_sorted = thr.sort_values(by='throughput', ascending=False).drop_duplicates(['model'])
@@ -125,8 +292,115 @@ thr_sorted['best_throughput_batch_size'] = thr.batch_size[thr_sorted.index]
 
 data = thr_sorted[(thr_sorted.model.isin(maps.model)) &
            (thr_sorted.device.isin(maps.device))]
+data1 = data.set_index('model').join(maps[['model','map', 'map_per_class']].set_index('model'))
 data = data.set_index('model').join(maps[['model','map']].set_index('model'))
-data['model_prefix'] = [i[:i.find('_')] if i.find('_') > 0 else i for i in data.index]
+data['model_prefix'] = [i[:i.find('_')] if i.find('_') > 0 and not i.startswith('faster') else 'faster_rcnn' for i in data.index]
+# print(data['model_prefix'])
+# print(data['model_prefix']['faster_rcnn_resnet50_v1b_coco'])
+# print(data['model_prefix'])
 
-show(throughput_vs_map(data))
+# pp = throughput_vs_map(data)
+
+# src = make_dataset(data, data.index.values.tolist())
+# pp = make_plot(src)
+# pp.sizing_mode = 'scale_width'
+# show(pp)
+
+
+# from bokeh.io import export_png
+# pp.background_fill_color = "beige"
+# pp.background_fill_alpha = 0.5
+# export_png(pp, filename="detection.png")
+```
+
+
+```
+def plot_bar(data):
+    import copy
+    import numpy as np
+    from bokeh import palettes
+    from bokeh.plotting import figure
+    from bokeh.models import ColumnDataSource, HoverTool, FactorRange
+    from bokeh.layouts import gridplot
+    from bokeh.transform import factor_cmap
+    from bokeh.models import LogTickFormatter
+    from bokeh.models import Legend
+    from bokeh.palettes import Spectral11, Plasma256, Category20
+    assert 'map_per_class' in data.columns
+#     new_data = pd.concat([data.drop(['map_per_class'], axis=1), data['map_per_class'].apply(pd.Series)], axis=1)
+#     print(new_data)
+    keys = list(data.map_per_class[0].keys())
+    keys.sort()
+    keys = keys[::-1]
+    p = figure(plot_width=500, plot_height=1000, y_range=keys,
+               active_drag="pan", toolbar_location='above', tools="pan,wheel_zoom,box_zoom,save,reset",)
+
+    colors = Category20[max(len(data.index),3)]
+
+    for ir, row in enumerate(data.iterrows()):
+        v = list([row[1]['map_per_class'][k] for k in keys])
+        source = ColumnDataSource(data=dict(x=keys, value=v, model=[row[1].name for _ in keys]))
+        p.circle(x='value', source=source, y='x', color=colors[ir], legend=data.index[ir], size=10)
+    p.xgrid.grid_line_color = None
+    p.legend.click_policy = "hide"
+
+#     p.y_range.start = 0
+#     p.yaxis.major_label_orientation = "vertical"
+    p.legend.location = "top_right"
+    p.legend.orientation = "horizontal"
+    p.legend.label_text_font_size = '0.5em'
+    p.xaxis.axis_label_text_font_size = "1.5em"
+    p.title.text_font_size = '1em'
+    p.yaxis.axis_label_text_font_size = "1em"
+    p.xaxis.axis_label_text_font_size = "1em"
+    p.xaxis.major_label_text_font_size = "0.5em"
+    p.yaxis.axis_label_text_font_size = "1em"
+    p.yaxis.major_label_text_font_size = "0.8em"
+
+    new_legend = p.legend[0]
+#     print((new_legend.items))
+    N = 3
+    num_legends = int(np.ceil(len(new_legend.items) / N))
+    new_legends = []
+    for i, item in enumerate(range(num_legends)):
+        begin = i * N
+        end = min(i * N + N, len(new_legend.items))
+#         print(begin, end)
+        ll = Legend(items=new_legend.items[begin:end],
+                 location=(0, 0 * (i + 1)), orientation="horizontal")
+        new_legends.append(ll)
+    p.legend[0].items = []
+#     p.legend[0].visible = None
+#     p.add_layout(new_legend, 'below')
+    for nl in new_legends:
+#         print(type(nl))
+        p.add_layout(nl, 'above')
+    p.xaxis.axis_label = 'mAP per category(%)'
+    p.sizing_mode = 'scale_width'
+    p.legend.click_policy = "hide"
+    toolstips = [("Model", "@model"), ("Category", "@x"), ("mAP", "@value")]
+    p.add_tools(HoverTool(tooltips=toolstips))
+    p.toolbar.logo = None
+    p.legend.label_text_font_size = '1vw'
+    return p
+
+
+p2 = plot_bar(data1)
+show(p2)
+```
+
+
+```
+from bokeh.plotting import figure
+from bokeh.resources import CDN
+from bokeh.embed import file_html
+
+html = file_html(p2, CDN, "my plot")
+print(html)
+```
+
+
+```
+# per class perf comparison
+
 ```

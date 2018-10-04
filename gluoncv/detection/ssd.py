@@ -39,11 +39,13 @@ def get_map(model_name):
             det_bboxes.append(bboxes.clip(0, data_shape))
         metric.update(det_bboxes, det_ids, det_scores)
 
+    result = metric.get()
     return {
         'device':dm.utils.nv_gpu_name(0),
         'model':model_name,
         'batch_size':batch_size,
-        'map':'{:.2f}'.format(float(metric.get()[1][-1])),
+        'map':'{:.2f}'.format(float(result[1][-1])),
+        'map_per_class': {k:float(v) for k, v in zip(result[0][1:-1], result[1][1:-1])},
         'workload':'Inference',
     }
 
