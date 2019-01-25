@@ -117,12 +117,11 @@ def benchmark_accuracy():
         res, _ = dm.benchmark.run_with_separate_process(
             get_accuracy, model_name
         )
-        if res:
-            results.append(res)
+        results.append(res)
         with open(os.path.join(os.path.dirname(__file__), 'cnn_'+device_name+'_accuracy.json'), 'w') as f:
             json.dump(results, f)
 
-# benchmark_accuracy()
+#benchmark_accuracy()
 
 def get_throughput(model_name, batch_size):
     ctx = mx.gpu(0)
@@ -146,13 +145,16 @@ def get_throughput(model_name, batch_size):
     tic = time.time()
     device_mem = 0
     device_mem_count = 0
+    ttime = 0.
     for _ in range(iters):
+        tic = time.time()
         YY = net(X)
         YY.wait_to_read()
+        ttime += time.time() - tic
         device_mem += dm.utils.nv_gpu_mem_usage() - mem
         device_mem_count += 1
     nd.waitall()
-    throughput = iters*batch_size/(time.time()-tic)
+    throughput = iters*batch_size/ttime
 
     return {
         'device':device_name,
@@ -224,3 +226,4 @@ def benchmark_max_batch_size():
         })
 
 # benchmark_max_batch_size()
+

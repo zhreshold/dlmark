@@ -5,7 +5,7 @@ set -x
 set -e
 
 # prepare the env
-# conda env update -f build/build.yml
+conda env update -f build/build.yml
 source activate dlmark_build
 
 make html
@@ -21,4 +21,4 @@ make html
 # make pdf
 # cp build/_build/latex/gluon_tutorials_zh.pdf build/_build/html/
 
-aws s3 sync --delete build/_build/html/ s3://dlmark.org/ --acl public-read
+#aws s3 sync --delete build/_build/html/ s3://dlmark.org/ --acl public-read

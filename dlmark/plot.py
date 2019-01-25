@@ -91,7 +91,6 @@ def throughput_vs_accuracy(data):
     p.yaxis.axis_label = 'Accuracy'
 
     p.legend.label_text_font_size = '12pt'
-    p.legend[0].location = "bottom_left"
     p.xaxis.axis_label_text_font_size = "15pt"
     p.yaxis.axis_label_text_font_size = "15pt"
 
@@ -141,7 +140,6 @@ def throughput_vs_map(data):
               size=size, color=index_cmap, source=source)
 
     p.legend.label_text_font_size = '12pt'
-    p.legend[0].location = "bottom_left"
 
     p.xaxis.axis_label = '#examples/sec'
     p.xgrid.grid_line_color = None

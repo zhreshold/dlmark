@@ -89,7 +89,7 @@ def get_throughput(model_name, batch_size, data_shape):
     for _ in range(iters):
         Y = net(X)
         nd.waitall()
-        YY = Y[0][0].asnumpy()
+        #YY = Y[0][0].asnumpy()
 
     throughput = iters*batch_size/(time.time()-tic)
 
@@ -166,4 +166,5 @@ def benchmark_max_batch_size():
                 'workload':'Inference',
             })
 
-benchmark_max_batch_size()
+#benchmark_max_batch_size()
+

@@ -20,5 +20,6 @@ fi
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 python setup.py develop --user
+export PYTHONPATH=~/gluon-cv:$PYTHONPATH
 
 python ${MODULE}
