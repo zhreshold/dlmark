@@ -19,7 +19,7 @@ def _preprocess(X):
 blacklist = ['faster', 'ssd', 'yolo3', 'fcn', 'psp', 'mask', 'cifar', 'deeplab', 'simple_pose', 'alpha_pose']
 model_list = [x for x in gcv.model_zoo.pretrained_model_list() if x.split('_')[0].lower() not in blacklist]
 action_list = ['kinetics400', 'ucf101']
-model_list = [x for x in model_list if x.split('_')[1].lower() not in action_list]
+model_list = [x for x in model_list if len(x.split('_')) < 2 or x.split('_')[1].lower() not in action_list]
 
 def get_accuracy(model_name):
     batch_size = 64
