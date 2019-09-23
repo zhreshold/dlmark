@@ -16,39 +16,6 @@ def _preprocess(X):
     X = nd.array(X).transpose((0,3,1,2))
     return (X.astype('float32') / 255 - rgb_mean) / rgb_std
 
-#'MobileNet-width-0.25':models.mobilenet0_25,
-#'MobileNet-width-0.5':models.mobilenet0_5,
-#'MobileNet-width-0.75':models.mobilenet0_75,
-#'MobileNet':models.mobilenet1_0,
-#'ResNet-101-v2':models.resnet101_v2,
-#'ResNet-152-v2':models.resnet152_v2,
-# 'VGG-11-BN':models.vgg11_bn,
-# 'VGG-13-BN':models.vgg13_bn,
-# 'VGG-16-BN':models.vgg16_bn,
-# 'VGG-19-BN':models.vgg19_bn
-
-# modelzoo = {
-#     'AlexNet':models.alexnet,
-#     'DensetNet-121':models.densenet121,
-#     'DensetNet-161':models.densenet161,
-#     'DensetNet-169':models.densenet169,
-#     'DensetNet-201':models.densenet201,
-#     'ResNet-v1-101':models.resnet101_v1,
-#     'ResNet-v1-152':models.resnet152_v1,
-#     'ResNet-v1-18':models.resnet18_v1,
-#     'ResNet-v1-34':models.resnet34_v1,
-#     'ResNet-v1-50':models.resnet50_v1,
-#     'ResNet-v2-18':models.resnet18_v2,
-#     'ResNet-v2-34':models.resnet34_v2,
-#     'ResNet-v2-50':models.resnet50_v2,
-#     'SqueezeNet-1.0':models.squeezenet1_0,
-#     'SqueezeNet-1.1':models.squeezenet1_1,
-#     'VGG-11':models.vgg11,
-#     'VGG-13':models.vgg13,
-#     'VGG-16':models.vgg16,
-#     'VGG-19':models.vgg19,
-# }
-
 blacklist = ['faster', 'ssd', 'yolo3', 'fcn', 'psp', 'mask', 'cifar', 'deeplab']
 model_list = [x for x in gcv.model_zoo.pretrained_model_list() if x.split('_')[0].lower() not in blacklist]
 
@@ -93,14 +60,6 @@ def get_accuracy(model_name):
         if n > 5e4:
             break
 
-    # for X, y in dataset:
-    #     X = _preprocess(X).as_in_context(ctx)
-    #     y = nd.array(y, ctx)
-    #     yhat = net(X)
-    #     acc += nd.sum(yhat.argmax(axis=1)==y).asscalar()
-    #     n += X.shape[0]
-    #     if n > 5e3:
-    #         break
     return {
         'device':dm.utils.nv_gpu_name(0),
         'model':model_name,
@@ -120,8 +79,6 @@ def benchmark_accuracy():
         results.append(res)
         with open(os.path.join(os.path.dirname(__file__), 'cnn_'+device_name+'_accuracy.json'), 'w') as f:
             json.dump(results, f)
-
-#benchmark_accuracy()
 
 def get_throughput(model_name, batch_size):
     ctx = mx.gpu(0)
@@ -179,8 +136,6 @@ def benchmark_throughput():
                 break
             save.add(res)
 
-benchmark_throughput()
-
 def _try_batch_size(net, batch_size, data_shape, ctx):
     print('Try batch size', batch_size)
     def _run():
@@ -225,5 +180,6 @@ def benchmark_max_batch_size():
             'workload':'Inference',
         })
 
+benchmark_accuracy()
+benchmark_throughput()
 # benchmark_max_batch_size()
-

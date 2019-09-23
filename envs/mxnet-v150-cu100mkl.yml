@@ -1,0 +1,7 @@
+name: mxnet-v150-cu100mkl
+dependencies:
+- python
+- pandas
+- cython
+- pip:
+  - mxnet-cu100mkl==1.5.0
