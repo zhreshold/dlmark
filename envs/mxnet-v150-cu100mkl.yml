@@ -3,6 +3,7 @@ dependencies:
 - python
 - pandas
 - cython
+- pip
 - pip:
   - mxnet-cu100mkl==1.5.0
   - gluoncv
