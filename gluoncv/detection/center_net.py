@@ -5,25 +5,25 @@ import time, os
 import numpy as np
 import json
 import gluoncv as gcv
-from gluoncv.data.transforms.presets.ssd import SSDDefaultValTransform
+from gluoncv.data.transforms.presets.center_net import CenterNetDefaultValTransform, get_post_transform
 
 models = gcv.model_zoo.model_store.pretrained_model_list()
-ssd_models = [x for x in models if x.startswith('ssd') and x.endswith('coco')]
+center_net_models = [x for x in models if x.startswith('center_net') and x.endswith('coco')]
 
 def get_map(model_name):
     batch_size = 20  # divides 5000
-    data_shape = int(model_name.split('_')[1])
-    dataset = dm.image.COCOVal2017(batch_size, SSDDefaultValTransform(data_shape, data_shape),
-        'ssd_default_%d'%(data_shape))
+    data_shape = 512
+    dataset = dm.image.COCOVal2017(batch_size, CenterNetDefaultValTransform(data_shape, data_shape),
+        'center_net_default_%d'%(data_shape))
     val_dataset = gcv.data.COCODetection(splits='instances_val2017', skip_empty=False)
     metric = gcv.utils.metrics.coco_detection.COCODetectionMetric(
             val_dataset, '/tmp/{}_eval'.format(model_name), cleanup=True,
-            data_shape=(data_shape, data_shape))
+            data_shape=(data_shape, data_shape), post_affine=get_post_transform)
     ctx = mx.gpu(0)
     net = gcv.model_zoo.get_model(model_name, pretrained=True)
     net.collect_params().reset_ctx(ctx)
     metric.reset()
-    net.set_nms(nms_thresh=0.45, nms_topk=400)
+    #net.set_nms(nms_thresh=0.45, nms_topk=400)
     net.hybridize(static_shape=True, static_alloc=True)
     for ib in range(len(dataset)):
         batch = dataset[ib]
@@ -52,13 +52,13 @@ def get_map(model_name):
 def benchmark_map():
     device_name = dm.utils.nv_gpu_name(0).replace(' ', '-').lower()
     results = []
-    for model_name in ssd_models:
+    for model_name in center_net_models:
         print(model_name)
         res, _ = dm.benchmark.run_with_separate_process(
             get_map, model_name
         )
         results.append(res)
-        with open(os.path.join(os.path.dirname(__file__), 'ssd_'+device_name+'_map.json'), 'w') as f:
+        with open(os.path.join(os.path.dirname(__file__), 'center_net_'+device_name+'_map.json'), 'w') as f:
             json.dump(results, f)
 
 benchmark_map()
@@ -70,11 +70,11 @@ def get_throughput(model_name, batch_size):
     net.collect_params().reset_ctx(ctx)
     net.hybridize(static_shape=True, static_alloc=True)
     mem = dm.utils.nv_gpu_mem_usage()
-    data_shape = int(model_name.split('_')[1])
+    data_shape = 512
 
     # warm up, need real data
-    dataset = dm.image.COCOVal2017(batch_size, SSDDefaultValTransform(data_shape, data_shape),
-        'ssd_default_%d'%(data_shape))
+    dataset = dm.image.COCOVal2017(batch_size, CenterNetDefaultValTransform(data_shape, data_shape),
+        'center_net_default_%d'%(data_shape))
     X = dataset[0][0].as_in_context(ctx)
     # X = np.random.uniform(low=-254, high=254, size=(batch_size,3, data_shape,data_shape))
     # X = _preprocess(X).as_in_context(ctx)
@@ -103,7 +103,7 @@ def get_throughput(model_name, batch_size):
 
 def benchmark_throughput():
     save = dm.benchmark.SaveResults(postfix=dm.utils.nv_gpu_name(0))
-    for model_name in ssd_models:
+    for model_name in center_net_models:
         print(model_name)
         batch_sizes = [1,2,4,8,16,20,32,64,128]
         for batch_size in batch_sizes:
@@ -150,12 +150,12 @@ def find_largest_batch_size(net, data_shape, X):
 def benchmark_max_batch_size():
     save = dm.benchmark.SaveResults()
     device_name = dm.utils.nv_gpu_name(0)
-    for model_name in ssd_models:
+    for model_name in center_net_models:
         print(model_name)
         net = gcv.model_zoo.get_model(model_name, pretrained=True)
-        data_shape = int(model_name.split('_')[1])
-        dataset = dm.image.COCOVal2017(1, SSDDefaultValTransform(data_shape, data_shape),
-            'ssd_default_%d'%(data_shape))
+        data_shape = 512
+        dataset = dm.image.COCOVal2017(1, CenterNetDefaultValTransform(data_shape, data_shape),
+            'center_net_default_%d'%(data_shape))
         X = dataset[0][0]
         save.add({
             'device':device_name,

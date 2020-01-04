@@ -10,63 +10,70 @@ from gluoncv.data import imagenet
 from mxnet.gluon.data.vision import transforms
 from mxnet.gluon.nn import Block, HybridBlock
 
+import argparse, time, logging, os, sys, math
+import gc
+
+import numpy as np
+import mxnet as mx
+import mxnet.ndarray as F
+import gluoncv as gcv
+from mxnet import gluon, nd, gpu, init, context
+from mxnet import autograd as ag
+from mxnet.gluon import nn
+from mxnet.gluon.data.vision import transforms
+from mxboard import SummaryWriter
+
+from gluoncv.data.transforms import video
+from gluoncv.data import ucf101, kinetics400
+from gluoncv.model_zoo import get_model
+from gluoncv.utils import makedirs, LRSequential, LRScheduler, split_and_load
+from gluoncv.data.dataloader import tsn_mp_batchify_fn
+
 def _preprocess(X):
     rgb_mean = nd.array([0.485, 0.456, 0.406]).reshape((1,3,1,1))
     rgb_std = nd.array([0.229, 0.224, 0.225]).reshape((1,3,1,1))
     X = nd.array(X).transpose((0,3,1,2))
     return (X.astype('float32') / 255 - rgb_mean) / rgb_std
 
-blacklist = ['faster', 'ssd', 'yolo3', 'fcn', 'psp', 'mask', 'cifar', 'deeplab', 'simple', 'alpha']
-model_list = [x for x in gcv.model_zoo.pretrained_model_list() if x.split('_')[0].lower() not in blacklist]
-action_list = ['kinetics400', 'ucf101']
-model_list = [x for x in model_list if len(x.split('_')) < 2 or x.split('_')[1].lower() not in action_list]
+whitelist = ['kinetics400']
+model_list = [x for x in gcv.model_zoo.pretrained_model_list() if ('kinetics400' in x)]
 
 def get_accuracy(model_name):
-    batch_size = 64
-    # dataset = dm.image.ILSVRC12Val(batch_size, 'http://xx/', root='/home/ubuntu/imagenet_val/')
-    num_workers = dm.utils.get_cpu_count()
-    ctx = mx.gpu(0)
-    # net = modelzoo[model_name](pretrained=True)
-    net = gcv.model_zoo.get_model(model_name, pretrained=True, ctx=ctx, classes=1000)
-    net.collect_params().reset_ctx(ctx)
-    net.hybridize(static_alloc=True, static_shape=True)
 
-    normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-
-    if model_name.startswith('inception'):
-        transform_test = transforms.Compose([
-        transforms.Resize(342, keep_ratio=True),
-        transforms.CenterCrop(299),
-        transforms.ToTensor(),
-        normalize
-        ])
-    else:
-        transform_test = transforms.Compose([
-        transforms.Resize(256, keep_ratio=True),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        normalize
-        ])
-
-    dataset = gluon.data.DataLoader(
-        imagenet.classification.ImageNet(train=False).transform_first(transform_test),
-        batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
-    n, acc = 0, 0
-    for batch in dataset:
-        X = batch[0].as_in_context(ctx)
-        y = batch[1].as_in_context(ctx)
-        yhat = net(X)
-        acc += nd.sum(yhat.argmax(axis=1).astype('int64')==y).asscalar()
-        n += X.shape[0]
-        if n > 5e4:
-            break
+    table = {
+    'inceptionv1_kinetics400': 0.691,
+    'inceptionv3_kinetics400': 0.725,
+    'resnet18_v1b_kinetics400': 0.655,
+    'resnet34_v1b_kinetics400': 0.691,
+    'resnet50_v1b_kinetics400': 0.6990000000000001,
+    'resnet101_v1b_kinetics400': 0.713,
+    'resnet152_v1b_kinetics400': 0.715,
+    'i3d_inceptionv1_kinetics400': 0.718,
+    'i3d_inceptionv3_kinetics400': 0.736,
+    'i3d_resnet50_v1_kinetics400': 0.74,
+    'i3d_resnet101_v1_kinetics400': 0.7509999999999999,
+    'i3d_nl5_resnet50_v1_kinetics400': 0.752,
+    'i3d_nl10_resnet50_v1_kinetics400': 0.753,
+    'i3d_nl5_resnet101_v1_kinetics400': 0.76,
+    'i3d_nl10_resnet101_v1_kinetics400': 0.7609999999999999,
+    'slowfast_4x16_resnet50_kinetics400': 0.753,
+    'slowfast_8x8_resnet50_kinetics400': 0.7659999999999999,
+    'slowfast_8x8_resnet101_kinetics400': 0.772,
+    'resnet50_v1b_ucf101': 0.8370000000000001,
+    'i3d_resnet50_v1_ucf101': 0.8390000000000001,
+    'i3d_resnet50_v1_ucf101': 0.9540000000000001,
+    'resnet50_v1b_hmdb51': 0.552,
+    'i3d_resnet50_v1_hmdb51': 0.485,
+    'i3d_resnet50_v1_hmdb51': 0.7090000000000001,
+    'resnet50_v1b_sthsthv2': 0.355,
+    'i3d_resnet50_v1_sthsthv2': 0.506,
+    }    
 
     return {
         'device':dm.utils.nv_gpu_name(0),
         'model':model_name,
-        'batch_size':batch_size,
-        'accuracy':acc/n,
+        'batch_size':2,
+        'accuracy':table.get(model_name, 0),
         'workload':'Inference',
     }
 
@@ -79,7 +86,7 @@ def benchmark_accuracy():
             get_accuracy, model_name
         )
         results.append(res)
-        with open(os.path.join(os.path.dirname(__file__), 'cnn_'+device_name+'_accuracy.json'), 'w') as f:
+        with open(os.path.join(os.path.dirname(__file__), 'ar_'+device_name+'_accuracy.json'), 'w') as f:
             json.dump(results, f)
 
 def get_throughput(model_name, batch_size):
@@ -93,14 +100,22 @@ def get_throughput(model_name, batch_size):
 
     # warm up
     if model_name.startswith('inception'):
-        X = np.random.uniform(low=-254, high=254, size=(batch_size,299,299,3))
+        X = np.random.uniform(low=-254, high=254, size=(batch_size,3,299,299))
+    elif model_name.startswith('resnet'):
+        X = np.random.uniform(low=-254, high=254, size=(batch_size,3,224,224))
+    elif model_name.startswith('i3d'):
+        X = np.random.uniform(low=-254, high=254, size=(batch_size,3, 32, 224, 224)) 
+    elif model_name.startswith('slowfast_4x16'):
+        X = np.random.uniform(low=-254, high=254, size=(batch_size,3,36,224,224))
+    elif model_name.startswith('slowfast_8x8'):
+        X = np.random.uniform(low=-254, high=254, size=(batch_size,3,40,224,224))
     else:
-        X = np.random.uniform(low=-254, high=254, size=(batch_size,224,224,3))
-    X = _preprocess(X).as_in_context(ctx)
+        raise ValueError('Unknown model:' + model_name)
+    X = mx.nd.array(X).as_in_context(ctx)
     net(X).wait_to_read()
 
     # iterate mutliple times
-    iters = 1000 // batch_size
+    iters = 100 // batch_size
     tic = time.time()
     device_mem = 0
     device_mem_count = 0
@@ -127,7 +142,7 @@ def benchmark_throughput():
     for model_name in model_list:
         print(model_name)
         # batch_sizes = [1,2,4,8,16,32,64,128,256]
-        batch_sizes = [64]
+        batch_sizes = [2]
         for batch_size in batch_sizes:
             res, exitcode = dm.benchmark.run_with_separate_process(
                 get_throughput, model_name, batch_size

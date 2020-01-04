@@ -4,11 +4,17 @@ from mxnet import nd
 import time, os
 import numpy as np
 import json
+import gluoncv
 import gluoncv as gcv
 from mxnet import gluon
 from gluoncv.data import imagenet
 from mxnet.gluon.data.vision import transforms
 from mxnet.gluon.nn import Block, HybridBlock
+from gluoncv.model_zoo.segbase import *
+from gluoncv.model_zoo import get_model
+from gluoncv.data import get_segmentation_dataset, ms_batchify_fn
+from gluoncv.utils.viz import get_color_pallete
+from tqdm import tqdm
 
 def _preprocess(X):
     rgb_mean = nd.array([0.485, 0.456, 0.406]).reshape((1,3,1,1))
@@ -16,57 +22,44 @@ def _preprocess(X):
     X = nd.array(X).transpose((0,3,1,2))
     return (X.astype('float32') / 255 - rgb_mean) / rgb_std
 
-blacklist = ['faster', 'ssd', 'yolo3', 'fcn', 'psp', 'mask', 'cifar', 'deeplab', 'simple', 'alpha']
-model_list = [x for x in gcv.model_zoo.pretrained_model_list() if x.split('_')[0].lower() not in blacklist]
-action_list = ['kinetics400', 'ucf101']
-model_list = [x for x in model_list if len(x.split('_')) < 2 or x.split('_')[1].lower() not in action_list]
+whitelist = ['fcn', 'psp', 'deeplab']
+model_list = [x for x in gcv.model_zoo.pretrained_model_list() if x.split('_')[0].lower() in whitelist]
+model_list = [x for x in model_list if x.endswith('coco')]
 
 def get_accuracy(model_name):
-    batch_size = 64
-    # dataset = dm.image.ILSVRC12Val(batch_size, 'http://xx/', root='/home/ubuntu/imagenet_val/')
-    num_workers = dm.utils.get_cpu_count()
-    ctx = mx.gpu(0)
-    # net = modelzoo[model_name](pretrained=True)
-    net = gcv.model_zoo.get_model(model_name, pretrained=True, ctx=ctx, classes=1000)
-    net.collect_params().reset_ctx(ctx)
-    net.hybridize(static_alloc=True, static_shape=True)
-
-    normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-
-    if model_name.startswith('inception'):
-        transform_test = transforms.Compose([
-        transforms.Resize(342, keep_ratio=True),
-        transforms.CenterCrop(299),
+    ctx = [mx.gpu(i) for i in range(4)]
+    batch_size = 4
+    input_transform = transforms.Compose([
         transforms.ToTensor(),
-        normalize
-        ])
-    else:
-        transform_test = transforms.Compose([
-        transforms.Resize(256, keep_ratio=True),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        normalize
-        ])
+        transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
+    ])
+    # get dataset
+    testset = get_segmentation_dataset(
+        'coco', split='val', mode='testval', transform=input_transform)
+    total_inter, total_union, total_correct, total_label = \
+        np.int64(0), np.int64(0), np.int64(0), np.int64(0)
+    test_data = gluon.data.DataLoader(
+        testset, batch_size, shuffle=False, last_batch='keep',
+        batchify_fn=ms_batchify_fn, num_workers=32)
+    model = get_model(model_name, pretrained=True)
+    model.collect_params().reset_ctx(ctx=ctx)
+#     model.hybridize(static_shape=True, static_alloc=True)
+    evaluator = MultiEvalModel(model, testset.num_class, ctx_list=ctx)
+    metric = gluoncv.utils.metrics.SegmentationMetric(testset.num_class)
 
-    dataset = gluon.data.DataLoader(
-        imagenet.classification.ImageNet(train=False).transform_first(transform_test),
-        batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
-    n, acc = 0, 0
-    for batch in dataset:
-        X = batch[0].as_in_context(ctx)
-        y = batch[1].as_in_context(ctx)
-        yhat = net(X)
-        acc += nd.sum(yhat.argmax(axis=1).astype('int64')==y).asscalar()
-        n += X.shape[0]
-        if n > 5e4:
-            break
-
+    tbar = tqdm(test_data)
+    for i, (data, dsts) in enumerate(tbar):
+        predicts = [pred[0] for pred in evaluator.parallel_forward(data)]
+        targets = [target.as_in_context(predicts[0].context) \
+                   for target in dsts]
+        metric.update(targets, predicts)
+        pixAcc, mIoU = metric.get()
+        tbar.set_description( 'pixAcc: %.4f, mIoU: %.4f' % (pixAcc, mIoU))
     return {
         'device':dm.utils.nv_gpu_name(0),
         'model':model_name,
         'batch_size':batch_size,
-        'accuracy':acc/n,
+        'mIoU':mIoU,
         'workload':'Inference',
     }
 
@@ -79,7 +72,7 @@ def benchmark_accuracy():
             get_accuracy, model_name
         )
         results.append(res)
-        with open(os.path.join(os.path.dirname(__file__), 'cnn_'+device_name+'_accuracy.json'), 'w') as f:
+        with open(os.path.join(os.path.dirname(__file__), 'semantic_segmentation_'+device_name+'_accuracy.json'), 'w') as f:
             json.dump(results, f)
 
 def get_throughput(model_name, batch_size):
@@ -91,33 +84,31 @@ def get_throughput(model_name, batch_size):
     net.hybridize(static_alloc=True, static_shape=True)
     mem = dm.utils.nv_gpu_mem_usage()
 
-    # warm up
-    if model_name.startswith('inception'):
-        X = np.random.uniform(low=-254, high=254, size=(batch_size,299,299,3))
-    else:
-        X = np.random.uniform(low=-254, high=254, size=(batch_size,224,224,3))
-    X = _preprocess(X).as_in_context(ctx)
-    net(X).wait_to_read()
+    
+    
+    bs = batch_size
+    num_iterations = 100
+    input_shape = (bs, 3, 480, 480)
+    size = num_iterations * bs
+    data = mx.random.uniform(-1.0, 1.0, shape=input_shape, ctx=mx.gpu(0), dtype='float32')
+    dry_run = 5
 
-    # iterate mutliple times
-    iters = 1000 // batch_size
-    tic = time.time()
-    device_mem = 0
-    device_mem_count = 0
-    ttime = 0.
-    tic = time.time()
-    for _ in range(iters):
-        YY = net(X)
-        YY.wait_to_read()
-    nd.waitall()
-    ttime = time.time() - tic
-    throughput = iters*batch_size/ttime
+    with tqdm(total=size+dry_run*bs) as pbar:
+        for n in range(dry_run + num_iterations):
+            if n == dry_run:
+                tic = time.time()
+            outputs = net(data)
+            for output in outputs:
+                output.wait_to_read()
+            pbar.update(bs)
+    speed = size / (time.time() - tic)
+    print('With batch size %d , %d batches, throughput is %f imgs/sec' % (bs, num_iterations, speed))
 
     return {
         'device':device_name,
         'model':model_name,
         'batch_size':batch_size,
-        'throughput':throughput,
+        'throughput':speed,
         'workload':'Inference',
         'device_mem': dm.utils.nv_gpu_mem_usage() - mem
     }
@@ -127,7 +118,7 @@ def benchmark_throughput():
     for model_name in model_list:
         print(model_name)
         # batch_sizes = [1,2,4,8,16,32,64,128,256]
-        batch_sizes = [64]
+        batch_sizes = [32]
         for batch_size in batch_sizes:
             res, exitcode = dm.benchmark.run_with_separate_process(
                 get_throughput, model_name, batch_size
