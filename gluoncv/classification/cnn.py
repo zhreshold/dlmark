@@ -5,6 +5,7 @@ import time, os
 import numpy as np
 import json
 import gluoncv as gcv
+print(gcv)
 from mxnet import gluon
 from gluoncv.data import imagenet
 from mxnet.gluon.data.vision import transforms
@@ -16,10 +17,20 @@ def _preprocess(X):
     X = nd.array(X).transpose((0,3,1,2))
     return (X.astype('float32') / 255 - rgb_mean) / rgb_std
 
-blacklist = ['faster', 'ssd', 'yolo3', 'fcn', 'psp', 'mask', 'cifar', 'deeplab', 'simple', 'alpha']
-model_list = [x for x in gcv.model_zoo.pretrained_model_list() if x.split('_')[0].lower() not in blacklist]
-action_list = ['kinetics400', 'ucf101']
-model_list = [x for x in model_list if len(x.split('_')) < 2 or x.split('_')[1].lower() not in action_list]
+blacklist = ['faster_rcnn', 'ssd', 'yolo3', 'fcn', 'psp', 'mask_rcnn', 'cifar', 'deeplab', 'simple_pose', 'alpha_pose', 'center_net', 'kinetics400', 'ucf101', 'sthsthv2', 'mobile_pose', 'hmdb51']
+model_list = []
+for name in gcv.model_zoo.pretrained_model_list():
+    collect = True
+    for b in blacklist:
+        if b in name:
+            collect = False
+            break
+    if collect:
+        model_list.append(name)
+#model_list = [x for x in gcv.model_zoo.pretrained_model_list()
+#print(model_list)
+#print([x for x in gcv.model_zoo.pretrained_model_list() if 'resnest' in x])
+#raise
 
 def get_accuracy(model_name):
     batch_size = 64
@@ -37,6 +48,27 @@ def get_accuracy(model_name):
         transform_test = transforms.Compose([
         transforms.Resize(342, keep_ratio=True),
         transforms.CenterCrop(299),
+        transforms.ToTensor(),
+        normalize
+        ])
+    elif model_name.startswith('resnest101'):
+        transform_test = transforms.Compose([
+        transforms.Resize(293, keep_ratio=True, interpolation=2),
+        transforms.CenterCrop(256),
+        transforms.ToTensor(),
+        normalize
+        ])
+    elif model_name.startswith('resnest200'):
+        transform_test = transforms.Compose([
+        transforms.Resize(366, keep_ratio=True, interpolation=2),
+        transforms.CenterCrop(320),
+        transforms.ToTensor(),
+        normalize
+        ])
+    elif model_name.startswith('resnest269'):
+        transform_test = transforms.Compose([
+        transforms.Resize(476, keep_ratio=True, interpolation=2),
+        transforms.CenterCrop(416),
         transforms.ToTensor(),
         normalize
         ])
